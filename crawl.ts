@@ -1,8 +1,13 @@
-const { JSDOM } = require('jsdom');
+import { JSDOM } from 'jsdom';
 
-async function crawlPage(baseURL, currentURL, pages) {
+export async function crawlPage(
+    baseURL: string,
+    currentURL: string,
+    pages: Record<string, number>
+): Promise<Record<string, number>> {
     const baseURLObj = new URL(baseURL);
     const currentURLObj = new URL(currentURL);
+
     if (baseURLObj.hostname !== currentURLObj.hostname) {
         return pages;
     }
@@ -28,7 +33,7 @@ async function crawlPage(baseURL, currentURL, pages) {
         }
 
         const contentType = resp.headers.get('content-type');
-        if (!contentType.includes('text/html')) {
+        if (!contentType || !contentType.includes('text/html')) {
             console.log(
                 `non-html response: content type ${contentType}, on page ${currentURL}`
             );
@@ -36,55 +41,46 @@ async function crawlPage(baseURL, currentURL, pages) {
         }
 
         const htmlBody = await resp.text();
-
-        nextURLs = getURLsFromHTML(htmlBody, baseURL);
+        const nextURLs = getURLsFromHTML(htmlBody, baseURL);
 
         for (const nextUrl of nextURLs) {
             pages = await crawlPage(baseURL, nextUrl, pages);
         }
         return pages;
     } catch (err) {
-        console.log(`error in fetch: ${err.message}, on page ${currentURL}`);
+        if (err instanceof Error) {
+            console.log(`error in fetch: ${err.message}, on page ${currentURL}`);
+        }
+        return pages;
     }
 }
 
-function getURLsFromHTML(htmlBody, baseURL) {
-    const urls = [];
+export function getURLsFromHTML(htmlBody: string, baseURL: string): string[] {
+    const urls: string[] = [];
     const dom = new JSDOM(htmlBody);
     const linkElements = dom.window.document.querySelectorAll('a');
+
     for (const linkElement of linkElements) {
-        if (linkElement.href.slice(0, 1) === '/') {
-            //relatve
-            try {
-                const urlObj = new URL(`${baseURL}${linkElement.href}`);
-                urls.push(urlObj.href);
-            } catch (err) {
-                console.log(`error with relative url: ${err.message}`);
-            }
-        } else {
-            //absolute
-            try {
-                const urlObj = new URL(linkElement.href);
-                urls.push(urlObj.href);
-            } catch (err) {
-                console.log(`error with absolute url: ${err.message}`);
+        const href = linkElement.getAttribute('href');
+        if (!href) continue;
+
+        try {
+            const urlObj = new URL(href.startsWith('/') ? `${baseURL}${href}` : href);
+            urls.push(urlObj.href);
+        } catch (err) {
+            if (err instanceof Error) {
+                console.log(`error with URL: ${err.message}`);
             }
         }
     }
     return urls;
 }
 
-function normalizeURL(urlString) {
+export function normalizeURL(urlString: string): string {
     const urlObj = new URL(urlString);
-    const hostPath = `${urlObj.hostname}${urlObj.pathname}`;
-    if (hostPath.length > 0 && hostPath.slice(-1) === '/') {
-        return hostPath.slice(0, -1);
+    let hostPath = `${urlObj.hostname}${urlObj.pathname}`;
+    if (hostPath.endsWith('/')) {
+        hostPath = hostPath.slice(0, -1);
     }
     return hostPath;
 }
-
-module.exports = {
-    crawlPage,
-    getURLsFromHTML,
-    normalizeURL,
-};

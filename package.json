@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "main": "main.js",
+  "type": "module",
   "scripts": {
     "test": "jest",
-    "start": "node --no-warnings main.js"
+    "start": "node --no-warnings main.ts"
   },
   "author": "",
   "license": "ISC",
